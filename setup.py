@@ -20,9 +20,12 @@ elif (sys.platform=="darwin"):
         if(not brew_install):
             raise SystemError("Cannot install Homebrew on your system.")
 
-    rabbitmq_installed = 0==os.system("brew install rabbitmq")
+    rabbitmq_installed = 0==os.system("which rabbitmq-server")
     if(not rabbitmq_installed):
-        raise SystemError("RabbitMQ could not be installed using Homebrew.")
+        rabbitmq_install = 0==os.system("brew install rabbitmq")
+        if(not rabbitmq_install):
+            raise SystemError("Cannot install RabbitMQ using Homebrew.")
+    os.system("brew services start rabbitmq")
 else:
     raise SystemError("This package cannot be install on Windows or Cygwin.")
 
