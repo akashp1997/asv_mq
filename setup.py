@@ -34,12 +34,16 @@ try:
 except ImportError:
     from distutils.core import setup
 
+readme = open("README.md").read()
+
+import asvmq
+version = asvmq.__version__
 
 setup(
     name="asv_mq",
-    version="0.0.1",
+    version=version ,
     description="ASV Messaging Queue API for message passing between processes.",
-    long_description="ASVMQ for Message passing between processes using Protobuf and RabbitMQ",
+    long_description=readme,
     author="Akash Purandare",
     author_email="akash.p1997@gmail.com",
     url="https://github.com/akashp1997/asv_mq",
