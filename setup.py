@@ -7,7 +7,7 @@ import os
 if (sys.version_info.major!=3):
     raise SystemError("Python version 2 is installed. Please use Python 3.")
 
-if (sys.platform=="linux" or sys.platform=="linux2"):
+"""if (sys.platform=="linux" or sys.platform=="linux2"):
     #Check for installation type
     pass
 
@@ -28,6 +28,7 @@ elif (sys.platform=="darwin"):
     os.system("brew services start rabbitmq")
 else:
     raise SystemError("This package cannot be install on Windows or Cygwin.")
+"""
 
 try:
     from setuptools import setup
