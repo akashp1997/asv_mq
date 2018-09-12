@@ -7,29 +7,6 @@ import os
 if (sys.version_info.major!=3):
     raise SystemError("Python version 2 is installed. Please use Python 3.")
 
-"""if (sys.platform=="linux" or sys.platform=="linux2"):
-    #Check for installation type
-    pass
-
-elif (sys.platform=="darwin"):
-    #Brew installation
-    brew_installed = 0==os.system("which brew")
-    if (not brew_installed):
-        print("Homebrew is not installed on your system, installing Homebrew.")
-        brew_install = 0==os.system("/usr/bin/ruby -e '$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)'")
-        if(not brew_install):
-            raise SystemError("Cannot install Homebrew on your system.")
-
-    rabbitmq_installed = 0==os.system("which rabbitmq-server")
-    if(not rabbitmq_installed):
-        rabbitmq_install = 0==os.system("brew install rabbitmq")
-        if(not rabbitmq_install):
-            raise SystemError("Cannot install RabbitMQ using Homebrew.")
-    os.system("brew services start rabbitmq")
-else:
-    raise SystemError("This package cannot be install on Windows or Cygwin.")
-"""
-
 try:
     from setuptools import setup
 except ImportError:
