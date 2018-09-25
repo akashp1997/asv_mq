@@ -18,7 +18,7 @@ import asvmq
 version = asvmq.__version__
 
 setup(
-    name="asv_mq",
+    name="asvmq",
     version=version ,
     description="ASV Messaging Queue API for message passing between processes.",
     long_description=readme,
