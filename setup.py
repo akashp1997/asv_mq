@@ -19,9 +19,10 @@ version = asvmq.__version__
 
 setup(
     name="asvmq",
-    version=version ,
+    version=version,
     description="ASV Messaging Queue API for message passing between processes.",
     long_description=readme,
+    long_description_type="text/markdown",
     author="Akash Purandare",
     author_email="akash.p1997@gmail.com",
     url="https://github.com/akashp1997/asv_mq",
