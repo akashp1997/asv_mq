@@ -40,6 +40,8 @@ class Channel(object):
     def close(self):
         """Destroys the channel only"""
         #Not Safe to Use the method. Use del instead
+        if(self._channel==None):
+            return
         if (self._channel.is_open==True):
             self._channel.close()
 
@@ -123,7 +125,7 @@ class Subscriber(Channel):
         self._channel.basic_consume(self.callback, queue=self.queue_name, no_ack=True)
 
     def callback(self, channel, method, properties, body):
-        if(self.type==None):
+        if(self.type==None or self.type==str):
             self._callback(body)
         else:
             try:
@@ -131,12 +133,6 @@ class Subscriber(Channel):
                 self._callback(obj, callback_args)
             except:
                 raise ValueError("Is the Message sent Protocol Buffers message or string?")
-
-    def close(self):
-        """Destroys the object and deletes the exchange"""
-        #Not Safe to Use the method. Use del instead
-        self._channel.exchange_delete(self.topic)
-        Channel.close(self)
 
     def __del__(self):
         """Destructor function for the Publisher"""
