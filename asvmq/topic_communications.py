@@ -91,7 +91,7 @@ class Publisher(Channel):
     def close(self):
         """Destroys the object and deletes the exchange"""
         try:
-            self._channel.exchange_delete(self.topic, if_unused=True)
+            self._channel.exchange_delete(self.exchange_name, if_unused=True)
         except:
             pass
         Channel.close(self)
