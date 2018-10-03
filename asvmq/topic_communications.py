@@ -60,6 +60,10 @@ class Channel(object):
         """Destroys the channel and closes the connection"""
         self.close()
 
+    def __str__(self):
+        """Returns the name of the exchange and the type, if called for"""
+        return "Exchange %s is open on %s:%d and is of type %s" % (self.exchange_name, self.hostname, self.port, self._exchange_type)
+
     def create(self):
         """Initiates the Blocking Connection and the Channel for the process"""
         if (self._channel==None):
@@ -86,7 +90,12 @@ class Publisher(Channel):
 
     @property
     def topic(self):
+        """Returns the topic name specified during class creation"""
         return self._topic
+
+    def __str__(self):
+        """Returns the debug information of the publisher"""
+        return "Publisher on topic %s on %s:%d, of type %s" % (self.topic, self.hostname, self.port, str(self.type))
 
     def close(self):
         """Destroys the object and deletes the exchange"""
@@ -146,6 +155,11 @@ class Subscriber(Channel):
         if(self._queue!=None):
             return self._queue.method.queue
 
+    def __str__(self):
+        """Returns the debug information of the Subscriber"""
+        return "Subscriber on topic %s on %s:%d, of type %s" % (self.topic, self.hostname, self.port, str(self.type))
+
+
     def create(self):
         """Creates a Temporary Queue for accessing Data from the exchange"""
         Channel.create(self)
@@ -155,6 +169,7 @@ class Subscriber(Channel):
         self._channel.start_consuming()
 
     def callback(self, channel, method, properties, body):
+        """The Subscriber calls this function everytime a message is received on the other end"""
         if(self.type==None or self.type==str):
             self._callback(body)
         else:
