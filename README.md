@@ -2,9 +2,13 @@
 ------
 The team SRMASV uses this repository as an API to transfer data from one process or device to another process or device.
 
-We develop this API by using setuptools for easy installation of this Module within various different computers and developers.
 ------
 ### Installation
 ------
 To install just type in the following command:
-`python setup.py install`
+`pip install asvmq`
+
+There are three type of topologies involved:
+1. [x] Topic Topology
+2. [ ] Work Queue Topology
+3. [ ] Merge Topology
