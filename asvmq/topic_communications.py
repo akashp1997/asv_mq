@@ -2,7 +2,7 @@
 '''
 This module contains the Classes required to talk and send data via
 the RabbitMQ server using Pika Client library on the AQMP 0-9-1.
-The following module contains the Topic topologies and not the other ones.
+The following module contains the Topic topologies only.
 
 You can use the Publisher object to send data and Subscriber object to receive it
 
@@ -99,10 +99,6 @@ class Publisher(Channel):
 
     def close(self):
         """Destroys the object and deletes the exchange"""
-        try:
-            self._channel.exchange_delete(self.exchange_name, if_unused=True)
-        except:
-            pass
         Channel.close(self)
 
     def publish(self, message):
@@ -176,9 +172,11 @@ class Subscriber(Channel):
             try:
                 if(type(body)==str):
                     data = bytearray(body, "utf-8")
+                    print(data)
                     body = bytes(data)
                 _type = self.type
-                msg = _type.FromString(body)
+                if _type!=str:
+                    msg = _type.FromString(body)
                 self._callback(msg, self._callback_args)
             except:
                 raise ValueError("Is the Message sent Protocol Buffers message or string?")
