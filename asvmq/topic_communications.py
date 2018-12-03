@@ -124,7 +124,7 @@ class Subscriber(Channel):
     asvmq.Subscriber(<topic_name>, <object_type>, <callback_func>, [<callback_args>], [<ttl>], [<hostname>], [<port>])
     and the program will go in an infinite loop to get data from the given topic name
     """
-    def __init__(self, topic_name, object_type, callback, callback_args=None, ttl=100000, hostname="localhost", port=5672):
+    def __init__(self, topic_name, object_type, callback, callback_args=None, ttl=1000, hostname="localhost", port=5672):
         """Initialises the Consumer in RabbitMQ to receive messages"""
         self._topic = topic_name
         self._object_type = object_type
