@@ -121,7 +121,7 @@ class Publisher(Channel):
 class Subscriber(Channel):
     """Subscriber works on a callback function to process data and send it forward.
     To use it, create a new object using:
-    rospy.Subscriber(<topic_name>, <object_type>, <callback_func>, [<callback_args>], [<ttl>], [<hostname>], [<port>])
+    asvmq.Subscriber(<topic_name>, <object_type>, <callback_func>, [<callback_args>], [<ttl>], [<hostname>], [<port>])
     and the program will go in an infinite loop to get data from the given topic name
     """
     def __init__(self, topic_name, object_type, callback, callback_args=None, ttl=100000, hostname="localhost", port=5672):
