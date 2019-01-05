@@ -2,4 +2,6 @@
 and it contains the major base classes required to do communication in the ASV'''
 __version__ = "0.1.4"
 
-from .topic_communications import Publisher, Subscriber
+import topic_communications as topic
+
+import work_queue_communications as wqueue
