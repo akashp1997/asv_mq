@@ -130,18 +130,11 @@ class Subscriber(Channel):
     """Subscriber works on a callback function to process data
     and send it forward.
     To use it, create a new object using:
-<<<<<<< HEAD
-    asvmq.Subscriber(<topic_name>, <object_type>, <callback_func>, [<callback_args>], [<ttl>], [<hostname>], [<port>])
-    and the program will go in an infinite loop to get data from the given topic name
-    """
-    def __init__(self, topic_name, object_type, callback, callback_args=None, ttl=1000, hostname="localhost", port=5672):
-=======
-    rospy.Subscriber(<topic_name>, <object_type>, <callback_func>,
+    asvmq.Subscriber(<topic_name>, <object_type>, <callback_func>,
     [<callback_args>], [<ttl>], [<hostname>], [<port>])
     and the program will go in an infinite loop to get data from the given topic name
     """
     def __init__(self, **kwargs):
->>>>>>> master
         """Initialises the Consumer in RabbitMQ to receive messages"""
         topic_name = kwargs.get('topic_name')
         object_type = kwargs.get('object_type')
@@ -210,7 +203,7 @@ class Subscriber(Channel):
                     data = bytearray(body, "utf-8")
                     body = bytes(data)
                 _type = self.type
-                if _type!=str:
+                if _type != str:
                     msg = _type.FromString(body)
                 self._callback(msg, self._callback_args)
             except:
