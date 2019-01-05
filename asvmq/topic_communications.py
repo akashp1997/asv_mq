@@ -2,7 +2,7 @@
 '''
 This module contains the Classes required to talk and send data via
 the RabbitMQ server using Pika Client library on the AQMP 0-9-1.
-The following module contains the Topic topologies and not the other ones.
+The following module contains the Topic topologies only.
 
 You can use the Publisher object to send data and Subscriber object to receive it
 
@@ -109,14 +109,6 @@ class Publisher(Channel):
         return "Publisher on topic %s on %s:%d, of type %s" %\
          (self.topic, self.hostname, self.port, str(self.type))
 
-    def close(self):
-        """Destroys the object and deletes the exchange"""
-        try:
-            self._channel.exchange_delete(self.exchange_name, if_unused=True)
-        except ValueError:
-            pass
-        Channel.close(self)
-
     def publish(self, message):
         """Method for publishing the message to the MQ Broker"""
         if isinstance(message, self.type):
@@ -138,11 +130,18 @@ class Subscriber(Channel):
     """Subscriber works on a callback function to process data
     and send it forward.
     To use it, create a new object using:
+<<<<<<< HEAD
+    asvmq.Subscriber(<topic_name>, <object_type>, <callback_func>, [<callback_args>], [<ttl>], [<hostname>], [<port>])
+    and the program will go in an infinite loop to get data from the given topic name
+    """
+    def __init__(self, topic_name, object_type, callback, callback_args=None, ttl=1000, hostname="localhost", port=5672):
+=======
     rospy.Subscriber(<topic_name>, <object_type>, <callback_func>,
     [<callback_args>], [<ttl>], [<hostname>], [<port>])
     and the program will go in an infinite loop to get data from the given topic name
     """
     def __init__(self, **kwargs):
+>>>>>>> master
         """Initialises the Consumer in RabbitMQ to receive messages"""
         topic_name = kwargs.get('topic_name')
         object_type = kwargs.get('object_type')
@@ -211,7 +210,8 @@ class Subscriber(Channel):
                     data = bytearray(body, "utf-8")
                     body = bytes(data)
                 _type = self.type
-                msg = _type.FromString(body)
+                if _type!=str:
+                    msg = _type.FromString(body)
                 self._callback(msg, self._callback_args)
             except:
                 raise ValueError("Is the Message sent Protocol\
