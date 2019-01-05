@@ -12,11 +12,15 @@ import pika
 
 DEFAULT_EXCHANGE_NAME = "asvmq"
 
-class Channel(object):
+class Channel:
     """Internal class for Using Common Functionalities of RabbitMQ and Pika"""
-    def __init__(self, exchange_name=DEFAULT_EXCHANGE_NAME, exchange_type="direct", hostname="localhost", port=5672):
+    def __init__(self, **kwargs):
         """Initialises a producer node for RabbitMQ.
         Base Class for the rest of the Communication Classes"""
+        exchange_name = kwargs.get('exchange_name', DEFAULT_EXCHANGE_NAME)
+        exchange_type = kwargs.get('exchange_type', 'direct')
+        hostname = kwargs.get('hostname', 'localhost')
+        port = kwargs.get('port', 5672)
         self._parameters = pika.ConnectionParameters(hostname, port)
         self._channel = None
         self._exchange_name = exchange_name
@@ -51,9 +55,9 @@ class Channel(object):
     def close(self):
         """Destroys the channel only"""
         #Not safe to sse this method. Use del instead.
-        if(self._channel==None):
+        if self._channel is None:
             return
-        if (self._channel.is_open==True):
+        if self._channel.is_open:
             self._channel.close()
 
     def __del__(self):
@@ -62,14 +66,16 @@ class Channel(object):
 
     def __str__(self):
         """Returns the name of the exchange and the type, if called for"""
-        return "Exchange %s is open on %s:%d and is of type %s" % (self.exchange_name, self.hostname, self.port, self._exchange_type)
+        return "Exchange %s is open on %s:%d and is of type %s" % \
+        (self.exchange_name, self.hostname, self.port, self._exchange_type)
 
     def create(self):
         """Initiates the Blocking Connection and the Channel for the process"""
-        if (self._channel==None):
+        if self._channel is None:
             connection = pika.BlockingConnection(self.params)
             self._channel = connection.channel()
-        self._channel.exchange_declare(exchange=self.exchange_name, exchange_type=self.exchange_type)
+        self._channel.exchange_declare(exchange=self.exchange_name,\
+         exchange_type=self.exchange_type)
 
 class Publisher(Channel):
     """Class to use for publisher in Topic topology. Use exchange name as 'asvmq'
@@ -78,14 +84,19 @@ class Publisher(Channel):
     and then publish the message of type as follows:
     obj.publish(object), where object=object_type defined
     """
-    def __init__(self, topic_name, object_type=str, hostname="localhost", port=5672):
+    def __init__(self, **kwargs):
+        topic_name = kwargs.get('topic_name')
+        object_type = kwargs.get('object_type', str)
+        hostname = kwargs.get('hostname', 'localhost')
+        port = kwargs.get('port', 5672)
         self._object_type = object_type
         self._topic = topic_name
-        Channel.__init__(self, exchange_name=DEFAULT_EXCHANGE_NAME, exchange_type="topic", hostname=hostname, port=port)
+        Channel.__init__(self, exchange_type="topic", hostname=hostname, port=port)
 
     @property
     def type(self):
-        """Returns the type of object to be strictly followed by the Publisher to send"""
+        """Returns the type of object to be strictly followed by
+        the Publisher to send"""
         return self._object_type
 
     @property
@@ -95,40 +106,58 @@ class Publisher(Channel):
 
     def __str__(self):
         """Returns the debug information of the publisher"""
-        return "Publisher on topic %s on %s:%d, of type %s" % (self.topic, self.hostname, self.port, str(self.type))
-
-    def close(self):
-        """Destroys the object and deletes the exchange"""
-        Channel.close(self)
+        return "Publisher on topic %s on %s:%d, of type %s" %\
+         (self.topic, self.hostname, self.port, str(self.type))
 
     def publish(self, message):
         """Method for publishing the message to the MQ Broker"""
-        if(type(message)!=self.type):
-            raise ValueError("Please ensure that the message passed to this method is of the same type as defined during the Publisher declaration")
-        if(type(message)!=str):
+        if isinstance(message, self.type):
+            raise ValueError("Please ensure that the message\
+             passed to this method is of the same type as \
+             defined during the Publisher declaration")
+        if isinstance(message, str):
             try:
                 message = message.SerializeToString()
             except:
-                raise ValueError("Are you sure that the message is Protocol Buffer message/string?")
-        success = self._channel.basic_publish(exchange=self.exchange_name,routing_key=self.topic, body=message)
-        if(not success):
+                raise ValueError("Are you sure that the message \
+                is Protocol Buffer message/string?")
+        success = self._channel.basic_publish(exchange=self.exchange_name, \
+         routing_key=self.topic, body=message)
+        if not success:
             raise pika.exceptions.ChannelError("Cannot deliver message to exchange")
 
 class Subscriber(Channel):
-    """Subscriber works on a callback function to process data and send it forward.
+    """Subscriber works on a callback function to process data
+    and send it forward.
     To use it, create a new object using:
+<<<<<<< HEAD
     asvmq.Subscriber(<topic_name>, <object_type>, <callback_func>, [<callback_args>], [<ttl>], [<hostname>], [<port>])
     and the program will go in an infinite loop to get data from the given topic name
     """
     def __init__(self, topic_name, object_type, callback, callback_args=None, ttl=1000, hostname="localhost", port=5672):
+=======
+    rospy.Subscriber(<topic_name>, <object_type>, <callback_func>,
+    [<callback_args>], [<ttl>], [<hostname>], [<port>])
+    and the program will go in an infinite loop to get data from the given topic name
+    """
+    def __init__(self, **kwargs):
+>>>>>>> master
         """Initialises the Consumer in RabbitMQ to receive messages"""
+        topic_name = kwargs.get('topic_name')
+        object_type = kwargs.get('object_type')
+        callback = kwargs.get('callback')
+        callback_args = kwargs.get('callback_args', '')
+        ttl = kwargs.get('ttl', 1000)
+        hostname = kwargs.get('hostname', 'localhost')
+        port = kwargs.get('port', 5672)
         self._topic = topic_name
         self._object_type = object_type
         self._queue = None
         self._callback = callback
         self._callback_args = callback_args
         self._ttl = ttl
-        Channel.__init__(self, exchange_name=DEFAULT_EXCHANGE_NAME, exchange_type="topic", hostname=hostname, port=port)
+        Channel.__init__(self, exchange_name=DEFAULT_EXCHANGE_NAME,\
+         exchange_type="topic", hostname=hostname, port=port)
 
     @property
     def type(self):
@@ -148,29 +177,36 @@ class Subscriber(Channel):
     @property
     def queue_name(self):
         """Returns the Queue name if the queue exists"""
-        if(self._queue!=None):
+        if self._queue is not None:
             return self._queue.method.queue
+        return None
 
     def __str__(self):
         """Returns the debug information of the Subscriber"""
-        return "Subscriber on topic %s on %s:%d, of type %s" % (self.topic, self.hostname, self.port, str(self.type))
+        return "Subscriber on topic %s on %s:%d, of type %s" %\
+         (self.topic, self.hostname, self.port, str(self.type))
 
 
     def create(self):
         """Creates a Temporary Queue for accessing Data from the exchange"""
         Channel.create(self)
-        self._queue = self._channel.queue_declare(arguments={"x-message-ttl": self.ttl}, exclusive=True)
-        self._channel.queue_bind(exchange=self.exchange_name, queue=self.queue_name, routing_key=self.topic)
+        self._queue = self._channel.queue_declare(arguments=\
+        {"x-message-ttl": self.ttl}, exclusive=True)
+        self._channel.queue_bind(exchange=self.exchange_name, \
+        queue=self.queue_name, routing_key=self.topic)
         self._channel.basic_consume(self.callback, queue=self.queue_name)
         self._channel.start_consuming()
 
     def callback(self, channel, method, properties, body):
-        """The Subscriber calls this function everytime a message is received on the other end"""
-        if(self.type==None or self.type==str):
+        """The Subscriber calls this function everytime
+         a message is received on the other end"""
+        #TODO: Use channel and properties for debug and logging
+        del channel, properties
+        if self.type is None or self.type == str:
             self._callback(body)
         else:
             try:
-                if(type(body)==str):
+                if isinstance(body, str):
                     data = bytearray(body, "utf-8")
                     body = bytes(data)
                 _type = self.type
@@ -178,5 +214,6 @@ class Subscriber(Channel):
                     msg = _type.FromString(body)
                 self._callback(msg, self._callback_args)
             except:
-                raise ValueError("Is the Message sent Protocol Buffers message or string?")
+                raise ValueError("Is the Message sent Protocol\
+                 Buffers message or string?")
         self._channel.basic_ack(delivery_tag=method.delivery_tag)
