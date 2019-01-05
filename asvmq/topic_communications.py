@@ -172,7 +172,6 @@ class Subscriber(Channel):
             try:
                 if(type(body)==str):
                     data = bytearray(body, "utf-8")
-                    print(data)
                     body = bytes(data)
                 _type = self.type
                 if _type!=str:
