@@ -14,6 +14,7 @@ from google.protobuf.json_format import MessageToJson
 
 DEFAULT_EXCHANGE_NAME = "asvmq"
 LOG_EXCHANGE_NAME = "logs"
+GRAPH_EXCHANGE_NAME = "graph"
 
 class Channel:
     """Internal class for Using Common Functionalities of RabbitMQ and Pika"""
@@ -77,8 +78,6 @@ class Channel:
         if self._channel is None:
             connection = pika.BlockingConnection(self.params)
             self._channel = connection.channel()
-        self._channel.exchange_declare(exchange=LOG_EXCHANGE_NAME,\
-         exchange_type="fanout")
         self._channel.exchange_declare(exchange=self.exchange_name,\
          exchange_type=self.exchange_type)
 
@@ -117,6 +116,13 @@ class Publisher(Channel):
         """Returns the debug information of the publisher"""
         return "Publisher on topic %s on %s:%d, of type %s" %\
          (self.topic, self.hostname, self.port, str(self.type))
+
+    def create(self):
+        """Initialises the channel create and also adds the logging
+        publisher for sending message to logging systems"""
+        Channel.create(self)
+        self._channel.exchange_declare(exchange=LOG_EXCHANGE_NAME,\
+         exchange_type="fanout")
 
     def publish(self, message):
         """Method for publishing the message to the MQ Broker"""
@@ -202,6 +208,8 @@ class Subscriber(Channel):
     def create(self):
         """Creates a Temporary Queue for accessing Data from the exchange"""
         Channel.create(self)
+        self._channel.exchange_declare(exchange=GRAPH_EXCHANGE_NAME,\
+        exchange_type="fanout")
         self._queue = self._channel.queue_declare(arguments=\
         {"x-message-ttl": self.ttl}, exclusive=True)
         self._channel.queue_bind(exchange=self.exchange_name, \
@@ -227,4 +235,5 @@ class Subscriber(Channel):
                     raise ValueError("Is the Message sent Protocol\
                     Buffers message or string?")
             self._channel.basic_ack(delivery_tag=method.delivery_tag)
+            
             self._callback(msg, self._callback_args)
