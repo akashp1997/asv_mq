@@ -9,8 +9,11 @@ You can use the Publisher object to send data and Subscriber object to receive i
 '''
 
 import pika
+import asvprotobuf.std_pb2
+from google.protobuf.json_format import MessageToJson
 
 DEFAULT_EXCHANGE_NAME = "asvmq"
+LOG_EXCHANGE_NAME = "logs"
 
 class Channel:
     """Internal class for Using Common Functionalities of RabbitMQ and Pika"""
@@ -54,7 +57,7 @@ class Channel:
 
     def close(self):
         """Destroys the channel only"""
-        #Not safe to sse this method. Use del instead.
+        #Not safe to use this method. Use del instead.
         if self._channel is None:
             return
         if self._channel.is_open:
@@ -74,6 +77,8 @@ class Channel:
         if self._channel is None:
             connection = pika.BlockingConnection(self.params)
             self._channel = connection.channel()
+        self._channel.exchange_declare(exchange=LOG_EXCHANGE_NAME,\
+         exchange_type="fanout")
         self._channel.exchange_declare(exchange=self.exchange_name,\
          exchange_type=self.exchange_type)
 
@@ -91,7 +96,11 @@ class Publisher(Channel):
         port = kwargs.get('port', 5672)
         self._object_type = object_type
         self._topic = topic_name
-        Channel.__init__(self, exchange_type="topic", hostname=hostname, port=port)
+        kwargs = {}
+        kwargs["exchange_type"] = "topic"
+        kwargs["hostname"] = hostname
+        kwargs["port"] = port
+        Channel.__init__(self, **kwargs)
 
     @property
     def type(self):
@@ -111,16 +120,26 @@ class Publisher(Channel):
 
     def publish(self, message):
         """Method for publishing the message to the MQ Broker"""
-        if isinstance(message, self.type):
+        log_message = asvprotobuf.std_pb2.Log()
+        log_message.level = 0
+        if not isinstance(message, self.type):
             raise ValueError("Please ensure that the message\
              passed to this method is of the same type as \
              defined during the Publisher declaration")
         if isinstance(message, str):
+            log_message.name = "str"
+        else:
             try:
+                log_message.message = MessageToJson(message)
                 message = message.SerializeToString()
             except:
                 raise ValueError("Are you sure that the message \
                 is Protocol Buffer message/string?")
+
+        log_success = self._channel.basic_publish(exchange=LOG_EXCHANGE_NAME,\
+         routing_key='', body=MessageToJson(log_message))
+        if not log_success:
+            raise RuntimeWarning("Cannot deliver message to logger")
         success = self._channel.basic_publish(exchange=self.exchange_name, \
          routing_key=self.topic, body=message)
         if not success:
@@ -193,20 +212,19 @@ class Subscriber(Channel):
     def callback(self, channel, method, properties, body):
         """The Subscriber calls this function everytime
          a message is received on the other end"""
-        #TODO: Use channel and properties for debug and logging
         del channel, properties
         if self.type is None or self.type == str:
             self._callback(body)
         else:
-            try:
-                if isinstance(body, str):
-                    data = bytearray(body, "utf-8")
-                    body = bytes(data)
-                _type = self.type
-                if _type != str:
+            if isinstance(body, str):
+                data = bytearray(body, "utf-8")
+                body = bytes(data)
+            _type = self.type
+            if _type != str:
+                try:
                     msg = _type.FromString(body)
-                self._callback(msg, self._callback_args)
-            except:
-                raise ValueError("Is the Message sent Protocol\
-                 Buffers message or string?")
-        self._channel.basic_ack(delivery_tag=method.delivery_tag)
+                except:
+                    raise ValueError("Is the Message sent Protocol\
+                    Buffers message or string?")
+            self._channel.basic_ack(delivery_tag=method.delivery_tag)
+            self._callback(msg, self._callback_args)
