@@ -6,10 +6,6 @@ The following module contains the Work Queue topologies and not the other ones.
 '''
 
 import pika
-import asvprotobuf.std_pb2
-from google.protobuf.json_format import MessageToJson
-
-
 
 class Queue(object):
     """Base class for storing the common Functionalities between Worker and Producers"""
@@ -126,115 +122,24 @@ class Worker(Queue):
         return self._object_type
 
     def create(self):
-        """Initialises the channel create and also adds the logging
-        publisher for sending message to logging systems"""
-        Channel.create(self)
-        self._channel.exchange_declare(exchange=LOG_EXCHANGE_NAME,\
-         exchange_type="log")
-
-    def publish(self, message):
-        """Method for publishing the message to the MQ Broker"""
-	log_message = asvprotobuf.std_pb2.Log()
-        log_message.level = 0
-        if not isinstance(message, self.type):
-            raise ValueError("Please ensure that the message\
-             passed to this method is of the same type as \
-             defined during the Publisher declaration")
-        if isinstance(message, str):
-            log_message.name = "str"
-        else:
-            try:
-                log_message.message = MessageToJson(message)
-                message = message.SerializeToString()
-            except:
-                raise ValueError("Are you sure that the message \
-                is Protocol Buffer message/string?")
-
-        log_success = self._channel.basic_publish(exchange=LOG_EXCHANGE_NAME,\
-         routing_key='', body=MessageToJson(log_message))
-        if not log_success:
-            raise RuntimeWarning("Cannot deliver message to logger")
-        success = self._channel.basic_publish(exchange=self.exchange_name, \
-         routing_key=self.topic, body=message)
-        if not success:
-	    raise pika.exceptions.ChannelError("Cannot deliver message to exchange")
-class Subscriber(Channel):
-    """Subscriber works on a callback function to process data
-    and send it forward.
-    To use it, create a new object using:
-    asvmq.Subscriber(<topic_name>, <object_type>, <callback_func>,
-    [<callback_args>], [<ttl>], [<hostname>], [<port>])
-    and the program will go in an infinite loop to get data from the given topic name
-    """
-    def __init__(self, **kwargs):
-        """Initialises the Consumer in RabbitMQ to receive messages"""
-        topic_name = kwargs.get('topic_name')
-        object_type = kwargs.get('object_type')
-        callback = kwargs.get('callback')
-        callback_args = kwargs.get('callback_args', '')
-        ttl = kwargs.get('ttl', 1000)
-        hostname = kwargs.get('hostname', 'localhost')
-        port = kwargs.get('port', 5672)
-        self._topic = topic_name
-        self._object_type = object_type
-        self._queue = None
-        self._callback = callback
-        self._callback_args = callback_args
-        self._ttl = ttl
-        Channel.__init__(self, exchange_name=DEFAULT_EXCHANGE_NAME,\
-         exchange_type="topic", hostname=hostname, port=port)
-    @property
-    def type(self):
-        """Returns the type of object to be strictly followed by the Publisher to send"""
-        return self._object_type
-    @property
-    def ttl(self):
-        """Returns the TTL parameter of the Queue"""
-        return self._ttl
-    @property
-    def topic(self):
-        """Returns the name of the topic as a variable"""
-        return self._topic
-    @property
-    def queue_name(self):
-        """Returns the Queue name if the queue exists"""
-        if self._queue is not None:
-            return self._queue.method.queue
-        return None
-    def __str__(self):
-        """Returns the debug information of the Subscriber"""
-        return "Subscriber on topic %s on %s:%d, of type %s" %\
-         (self.topic, self.hostname, self.port, str(self.type))
-    def create(self):
-        """Creates a Temporary Queue for accessing Data from the exchange"""
-        Channel.create(self)
-        self._channel.exchange_declare(exchange=GRAPH_EXCHANGE_NAME,\
-        exchange_type="fanout")
-        self._queue = self._channel.queue_declare(arguments=\
-        {"x-message-ttl": self.ttl}, exclusive=True)
-        self._channel.queue_bind(exchange=self.exchange_name, \
-        queue=self.queue_name, routing_key=self.topic)
+        """Starts the worker and starts consuming messages"""
+        Queue.create(self)
+        self._channel.basic_qos(prefetch_count=self.prefetch)
         self._channel.basic_consume(self.callback, queue=self.queue_name)
         self._channel.start_consuming()
+
     def callback(self, channel, method, properties, body):
-        """The Subscriber calls this function everytime
-         a message is received on the other end"""
-        del channel, properties
-        if self.type is None or self.type == str:
+        """The Worker calls this function everytime a message is received on this end"""
+        if(self.type==None or self.type==str):
             self._callback(body)
         else:
-	     if isinstance(body, str):
-                data = bytearray(body, "utf-8")
-                body = bytes(data)
-            _type = self.type
-            if _type != str:
-                try:
-                    msg = _type.FromString(body)
-		                except:
-                    raise ValueError("Is the Message sent Protocol\
-                    Buffers message or string?")
-            self._channel.basic_ack(delivery_tag=method.delivery_tag)
-
-            self._callback(msg, self._callback_args)
-
-    
+            try:
+                if(type(body)==str):
+                    data = bytearray(body, "utf-8")
+                    body = bytes(data)
+                _type = self.type
+                msg = _type.FromString(body)
+                self._callback(msg, self._callback_args)
+            except:
+                raise ValueError("Is the Message sent Protocol Buffers message or string?")
+        self._channel.basic_ack(delivery_tag=method.delivery_tag)
