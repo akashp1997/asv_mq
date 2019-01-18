@@ -4,6 +4,8 @@
 import sys
 import os
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 if (sys.version_info.major!=3):
     raise SystemError("Python version 2 is installed. Please use Python 3.")
 
@@ -12,7 +14,8 @@ try:
 except ImportError:
     from distutils.core import setup
 
-readme = open("README.md").read()
+readme = open(os.path.join(BASE_DIR,"README.md")).read()
+requirements = open(os.path.join(BASE_DIR,"requirements.txt")).read().strip().split('\n')
 
 import asvmq
 version = asvmq.__version__
@@ -28,7 +31,7 @@ setup(
     url="https://github.com/akashp1997/asv_mq",
     packages=["asvmq"],
     include_package_data=True,
-    install_requires=["pika>=0.12.0"],
+    install_requires=requirements,
     license="BSD-3-Clause",
     zip_safe=True,
     keywords="asv_mq"

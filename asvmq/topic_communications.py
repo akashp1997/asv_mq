@@ -9,8 +9,12 @@ You can use the Publisher object to send data and Subscriber object to receive i
 '''
 
 import pika
+import asvprotobuf.std_pb2
+from google.protobuf.json_format import MessageToJson
 
 DEFAULT_EXCHANGE_NAME = "asvmq"
+LOG_EXCHANGE_NAME = "logs"
+GRAPH_EXCHANGE_NAME = "graph"
 
 class Channel:
     """Internal class for Using Common Functionalities of RabbitMQ and Pika"""
@@ -19,6 +23,7 @@ class Channel:
         Base Class for the rest of the Communication Classes"""
         exchange_name = kwargs.get('exchange_name', DEFAULT_EXCHANGE_NAME)
         exchange_type = kwargs.get('exchange_type', 'direct')
+        self._node_name = kwargs.get('node_name', 'node')
         hostname = kwargs.get('hostname', 'localhost')
         port = kwargs.get('port', 5672)
         self._parameters = pika.ConnectionParameters(hostname, port)
@@ -52,9 +57,14 @@ class Channel:
         """This method returns the exchange type"""
         return self._exchange_type
 
+    @property
+    def node_name(self):
+        """Returns the name of the node that was used during the initialisation"""
+        return self._node_name
+
     def close(self):
         """Destroys the channel only"""
-        #Not safe to sse this method. Use del instead.
+        #Not safe to use this method. Use del instead.
         if self._channel is None:
             return
         if self._channel.is_open:
@@ -89,9 +99,12 @@ class Publisher(Channel):
         object_type = kwargs.get('object_type', str)
         hostname = kwargs.get('hostname', 'localhost')
         port = kwargs.get('port', 5672)
+        node_name = kwargs.get('node_name', 'pub_%s' % \
+        (str(object_type).split("\'")[1]))
         self._object_type = object_type
         self._topic = topic_name
-        Channel.__init__(self, exchange_type="topic", hostname=hostname, port=port)
+        Channel.__init__(self, exchange_name=DEFAULT_EXCHANGE_NAME,\
+         exchange_type="topic", hostname=hostname, port=port, node_name=node_name)
 
     @property
     def type(self):
@@ -109,18 +122,39 @@ class Publisher(Channel):
         return "Publisher on topic %s on %s:%d, of type %s" %\
          (self.topic, self.hostname, self.port, str(self.type))
 
+    def create(self):
+        """Initialises the channel create and also adds the logging
+        publisher for sending message to logging systems"""
+        Channel.create(self)
+        self._channel.exchange_declare(exchange=LOG_EXCHANGE_NAME,\
+         exchange_type="fanout")
+
     def publish(self, message):
-        """Method for publishing the message to the MQ Broker"""
-        if isinstance(message, self.type):
+        """Method for publishing the message to the MQ Broker and also send
+        a message to log exchange for logging and monitoring"""
+        log_message = asvprotobuf.std_pb2.Log()
+        log_message.level = 0
+        message.header.sender = self.node_name
+        if not isinstance(message, self.type):
             raise ValueError("Please ensure that the message\
              passed to this method is of the same type as \
              defined during the Publisher declaration")
         if isinstance(message, str):
+            log_message.name = "str"
+        else:
             try:
+                log_message.message = MessageToJson(message).replace("\n","")\
+                .replace("\"", "'")
                 message = message.SerializeToString()
             except:
                 raise ValueError("Are you sure that the message \
                 is Protocol Buffer message/string?")
+
+        log_success = self._channel.basic_publish(exchange=LOG_EXCHANGE_NAME,\
+         routing_key='', body=MessageToJson(log_message).replace("\n", "")\
+         .replace("\'", "'"))
+        if not log_success:
+            raise RuntimeWarning("Cannot deliver message to logger")
         success = self._channel.basic_publish(exchange=self.exchange_name, \
          routing_key=self.topic, body=message)
         if not success:
@@ -143,14 +177,17 @@ class Subscriber(Channel):
         ttl = kwargs.get('ttl', 1000)
         hostname = kwargs.get('hostname', 'localhost')
         port = kwargs.get('port', 5672)
+        node_name = kwargs.get('node_name', 'sub_%s' % \
+        (str(object_type).split("\'")[1]))
         self._topic = topic_name
         self._object_type = object_type
         self._queue = None
+        self._last_timestamp = 0
         self._callback = callback
         self._callback_args = callback_args
         self._ttl = ttl
         Channel.__init__(self, exchange_name=DEFAULT_EXCHANGE_NAME,\
-         exchange_type="topic", hostname=hostname, port=port)
+         exchange_type="topic", hostname=hostname, port=port, node_name=node_name)
 
     @property
     def type(self):
@@ -183,6 +220,8 @@ class Subscriber(Channel):
     def create(self):
         """Creates a Temporary Queue for accessing Data from the exchange"""
         Channel.create(self)
+        self._channel.exchange_declare(exchange=GRAPH_EXCHANGE_NAME,\
+        exchange_type="fanout")
         self._queue = self._channel.queue_declare(arguments=\
         {"x-message-ttl": self.ttl}, exclusive=True)
         self._channel.queue_bind(exchange=self.exchange_name, \
@@ -192,21 +231,38 @@ class Subscriber(Channel):
 
     def callback(self, channel, method, properties, body):
         """The Subscriber calls this function everytime
-         a message is received on the other end"""
-        #TODO: Use channel and properties for debug and logging
+         a message is received on the other end and publishes a message
+         to the graph exchange to form the barebones of graph"""
         del channel, properties
         if self.type is None or self.type == str:
             self._callback(body)
         else:
-            try:
-                if isinstance(body, str):
-                    data = bytearray(body, "utf-8")
-                    body = bytes(data)
-                _type = self.type
-                if _type != str:
+            if isinstance(body, str):
+                data = bytearray(body, "utf-8")
+                body = bytes(data)
+            _type = self.type
+            if _type != str:
+                try:
                     msg = _type.FromString(body)
-                self._callback(msg, self._callback_args)
-            except:
-                raise ValueError("Is the Message sent Protocol\
-                 Buffers message or string?")
-        self._channel.basic_ack(delivery_tag=method.delivery_tag)
+                except:
+                    raise ValueError("Is the Message sent Protocol\
+                    Buffers message or string?")
+            self._channel.basic_ack(delivery_tag=method.delivery_tag)
+            graph_message = asvprotobuf.std_pb2.Graph()
+            graph_message.sender = msg.header.sender
+            graph_message.msg_type = str(self.type).split("\'")[1]
+            graph_message.receiver = self._node_name
+            curr_timestamp = msg.header.stamp.seconds+msg.header.stamp.nanos/(10**9)
+            if self._last_timestamp == 0:
+                graph_message.freq = 0
+            else:
+                graph_message.freq = 1/(curr_timestamp-self._last_timestamp)
+            self._last_timestamp = curr_timestamp
+            if graph_message.freq < 0:
+                graph_message.freq = 0
+            graph_success = self._channel.basic_publish(exchange=GRAPH_EXCHANGE_NAME,\
+             routing_key='', body=MessageToJson(graph_message).replace("\n", "")\
+             .replace("\'", "'"))
+            if not graph_success:
+                raise RuntimeWarning("The messages cannot be sent to graph.")
+            self._callback(msg, self._callback_args)
