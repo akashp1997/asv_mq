@@ -2,4 +2,4 @@
 and it contains the major base classes required to do communication in the ASV'''
 __version__ = "0.1.5"
 
-from .topic_communications import Publisher, Subscriber
+from .topic_communications import Publisher, Subscriber, logDebug, logInfo, logWarn, logFatal

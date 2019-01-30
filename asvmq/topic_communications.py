@@ -9,12 +9,15 @@ You can use the Publisher object to send data and Subscriber object to receive i
 '''
 
 import pika
+import uuid
 import asvprotobuf.std_pb2
 from google.protobuf.json_format import MessageToJson
 
 DEFAULT_EXCHANGE_NAME = "asvmq"
 LOG_EXCHANGE_NAME = "logs"
 GRAPH_EXCHANGE_NAME = "graph"
+
+#TODO: Create a subscriber for reading a particular level of logging and displaying on screen
 
 class Channel:
     """Internal class for Using Common Functionalities of RabbitMQ and Pika"""
@@ -23,7 +26,7 @@ class Channel:
         Base Class for the rest of the Communication Classes"""
         exchange_name = kwargs.get('exchange_name', DEFAULT_EXCHANGE_NAME)
         exchange_type = kwargs.get('exchange_type', 'direct')
-        self._node_name = kwargs.get('node_name', 'node')
+        self._node_name = kwargs.get('node_name', 'node'+str(uuid.uuid4()))
         hostname = kwargs.get('hostname', 'localhost')
         port = kwargs.get('port', 5672)
         self._parameters = pika.ConnectionParameters(hostname, port)
@@ -216,6 +219,10 @@ class Subscriber(Channel):
         return "Subscriber on topic %s on %s:%d, of type %s" %\
          (self.topic, self.hostname, self.port, str(self.type))
 
+    def __del__(self):
+        """Deletes the queue before closing the connection"""
+        self._channel.queue_delete(self.queue_name, if_unused=True)
+
 
     def create(self):
         """Creates a Temporary Queue for accessing Data from the exchange"""
@@ -266,3 +273,32 @@ class Subscriber(Channel):
             if not graph_success:
                 raise RuntimeWarning("The messages cannot be sent to graph.")
             self._callback(msg, self._callback_args)
+
+def _log(string, **kwargs):
+    kwargs["exchange_name"] = "logs"
+    kwargs["exchange_type]" = "fanout"
+    level = kwargs.pop("level", 0)
+    channel = Channel(kwargs)
+    log_message = asvprotobuf.std_pb2.Log()
+    log_message.level = level
+    log_message.name = "str"
+    log_message.message = string
+    log_message = MessageToJson(log_message).replace("\n", "").replace("\'", "'")
+    channel._channel.basic_publish(log_message)
+    del channel
+
+def logInfo(string, **kwargs):
+    kwargs["level"] = 0
+    _log(string, kwargs)
+
+def logWarn(string, **kwargs):
+    kwargs["level"] = 1
+    _log(string, **kwargs)
+
+def logDebug(string, **kwargs):
+    kwargs["level"] = 2
+    _log(string, **kwargs)
+
+def logFatal(string, **kwargs):
+    kwargs["level"] = 3
+    _
