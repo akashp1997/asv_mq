@@ -8,6 +8,8 @@ You can use the Publisher object to send data and Subscriber object to receive i
 
 '''
 
+import uuid
+
 import pika
 import asvprotobuf.std_pb2
 from google.protobuf.json_format import MessageToJson
@@ -16,6 +18,8 @@ DEFAULT_EXCHANGE_NAME = "asvmq"
 LOG_EXCHANGE_NAME = "logs"
 GRAPH_EXCHANGE_NAME = "graph"
 
+#TODO: Create a subscriber for reading a particular level of logging and displaying on screen
+
 class Channel:
     """Internal class for Using Common Functionalities of RabbitMQ and Pika"""
     def __init__(self, **kwargs):
@@ -23,7 +27,7 @@ class Channel:
         Base Class for the rest of the Communication Classes"""
         exchange_name = kwargs.get('exchange_name', DEFAULT_EXCHANGE_NAME)
         exchange_type = kwargs.get('exchange_type', 'direct')
-        self._node_name = kwargs.get('node_name', 'node')
+        self._node_name = kwargs.get('node_name', 'node')+str(uuid.uuid4())
         hostname = kwargs.get('hostname', 'localhost')
         port = kwargs.get('port', 5672)
         self._parameters = pika.ConnectionParameters(hostname, port)
@@ -61,6 +65,11 @@ class Channel:
     def node_name(self):
         """Returns the name of the node that was used during the initialisation"""
         return self._node_name
+
+    @property
+    def channel(self):
+        """Returns the channel object used to connect to the RabbitMQ broker"""
+        return self._channel
 
     def close(self):
         """Destroys the channel only"""
@@ -143,7 +152,7 @@ class Publisher(Channel):
             log_message.name = "str"
         else:
             try:
-                log_message.message = MessageToJson(message).replace("\n","")\
+                log_message.message = MessageToJson(message).replace("\n", "")\
                 .replace("\"", "'")
                 message = message.SerializeToString()
             except:
@@ -216,6 +225,10 @@ class Subscriber(Channel):
         return "Subscriber on topic %s on %s:%d, of type %s" %\
          (self.topic, self.hostname, self.port, str(self.type))
 
+    def __del__(self):
+        """Deletes the queue before closing the connection"""
+        self._channel.queue_delete(self.queue_name, if_unused=True)
+
 
     def create(self):
         """Creates a Temporary Queue for accessing Data from the exchange"""
@@ -266,3 +279,43 @@ class Subscriber(Channel):
             if not graph_success:
                 raise RuntimeWarning("The messages cannot be sent to graph.")
             self._callback(msg, self._callback_args)
+
+def _log(string, **kwargs):
+    """This function is a base function used to send log messages
+    to the RabbitMQ/ASVMQ logging system"""
+    kwargs["exchange_name"] = LOG_EXCHANGE_NAME
+    kwargs["exchange_type"] = "fanout"
+    level = kwargs.pop("level", 0)
+    channel = Channel(**kwargs)
+    log_message = asvprotobuf.std_pb2.Log()
+    log_message.level = level
+    log_message.name = "str"
+    log_message.message = string
+    log_message = MessageToJson(log_message).replace("\n", "").replace("\'", "'")
+    channel.channel.basic_publish(exchange=LOG_EXCHANGE_NAME, \
+    body=log_message, routing_key='')
+    del channel
+
+def log_info(string, **kwargs):
+    """This function uses the _log function to send log messages at
+    info level i.e at the user readable level(stdout)"""
+    kwargs["level"] = 0
+    _log(string, **kwargs)
+
+def log_warn(string, **kwargs):
+    """This function uses the _log function to send log messages at
+    warning level i.e at the exception that is not fatal"""
+    kwargs["level"] = 1
+    _log(string, **kwargs)
+
+def log_debug(string, **kwargs):
+    """This function uses the _log function to send log messages at
+    debug level i.e at the debugging purposes level"""
+    kwargs["level"] = 2
+    _log(string, **kwargs)
+
+def log_fatal(string, **kwargs):
+    """This function uses the _log function to send log messages at
+    fatal error level i.e at the irrecoverable exceptions"""
+    kwargs["level"] = 3
+    _log(string, **kwargs)
