@@ -27,7 +27,7 @@ class Channel:
         Base Class for the rest of the Communication Classes"""
         exchange_name = kwargs.get('exchange_name', DEFAULT_EXCHANGE_NAME)
         exchange_type = kwargs.get('exchange_type', 'direct')
-        self._node_name = kwargs.get('node_name', 'node'+str(uuid.uuid4()))
+        self._node_name = kwargs.get('node_name', 'node')+str(uuid.uuid4())
         hostname = kwargs.get('hostname', 'localhost')
         port = kwargs.get('port', 5672)
         self._parameters = pika.ConnectionParameters(hostname, port)
