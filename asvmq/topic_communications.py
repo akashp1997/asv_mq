@@ -126,6 +126,11 @@ class Publisher(Channel):
         """Returns the topic name specified during class creation"""
         return self._topic
 
+    @property
+    def node_name(self):
+        """Returns the node name of the publisher"""
+        return self._node_node
+
     def __str__(self):
         """Returns the debug information of the publisher"""
         return "Publisher on topic %s on %s:%d, of type %s" %\
@@ -146,8 +151,8 @@ class Publisher(Channel):
         message.header.sender = self.node_name
         if not isinstance(message, self.type):
             raise ValueError("Please ensure that the message\
-             passed to this method is of the same type as \
-             defined during the Publisher declaration")
+passed to this method is of the same type as \
+defined during the Publisher declaration")
         if isinstance(message, str):
             log_message.name = "str"
         else:
@@ -224,11 +229,6 @@ class Subscriber(Channel):
         """Returns the debug information of the Subscriber"""
         return "Subscriber on topic %s on %s:%d, of type %s" %\
          (self.topic, self.hostname, self.port, str(self.type))
-
-    def __del__(self):
-        """Deletes the queue before closing the connection"""
-        self._channel.queue_delete(self.queue_name, if_unused=True)
-
 
     def create(self):
         """Creates a Temporary Queue for accessing Data from the exchange"""
