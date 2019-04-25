@@ -129,7 +129,7 @@ class Publisher(Channel):
     @property
     def node_name(self):
         """Returns the node name of the publisher"""
-        return self._node_node
+        return self._node_name
 
     def __str__(self):
         """Returns the debug information of the publisher"""
@@ -157,6 +157,7 @@ defined during the Publisher declaration")
             log_message.name = "str"
         else:
             try:
+                log_message.name = str(type(message)).split("'")[1]
                 log_message.message = MessageToJson(message).replace("\n", "")\
                 .replace("\"", "'")
                 message = message.SerializeToString()
@@ -188,7 +189,7 @@ class Subscriber(Channel):
         object_type = kwargs.get('object_type')
         callback = kwargs.get('callback')
         callback_args = kwargs.get('callback_args', '')
-        ttl = kwargs.get('ttl', 1000)
+        ttl = kwargs.get('ttl', 10)
         hostname = kwargs.get('hostname', 'localhost')
         port = kwargs.get('port', 5672)
         node_name = kwargs.get('node_name', 'sub_%s' % \
@@ -269,7 +270,8 @@ class Subscriber(Channel):
             if self._last_timestamp == 0:
                 graph_message.freq = 0
             else:
-                graph_message.freq = 1/(curr_timestamp-self._last_timestamp)
+                if curr_timestamp-self._last_timestamp!=0:
+                    graph_message.freq = 1/(curr_timestamp-self._last_timestamp)
             self._last_timestamp = curr_timestamp
             if graph_message.freq < 0:
                 graph_message.freq = 0
