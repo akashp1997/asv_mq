@@ -9,7 +9,7 @@ You can use the Publisher object to send data and Subscriber object to receive i
 '''
 
 import uuid
-
+import sys
 import pika
 import asvprotobuf.std_pb2
 from google.protobuf.json_format import MessageToJson
@@ -17,6 +17,8 @@ from google.protobuf.json_format import MessageToJson
 DEFAULT_EXCHANGE_NAME = "asvmq"
 LOG_EXCHANGE_NAME = "logs"
 GRAPH_EXCHANGE_NAME = "graph"
+
+channel = None
 
 #TODO: Create a subscriber for reading a particular level of logging and displaying on screen
 
@@ -31,7 +33,6 @@ class Channel:
         hostname = kwargs.get('hostname', 'localhost')
         port = kwargs.get('port', 5672)
         self._parameters = pika.ConnectionParameters(hostname, port)
-        self._channel = None
         self._exchange_name = exchange_name
         self._exchange_type = exchange_type
         self.create()
@@ -71,18 +72,6 @@ class Channel:
         """Returns the channel object used to connect to the RabbitMQ broker"""
         return self._channel
 
-    def close(self):
-        """Destroys the channel only"""
-        #Not safe to use this method. Use del instead.
-        if self._channel is None:
-            return
-        if self._channel.is_open:
-            self._channel.close()
-
-    def __del__(self):
-        """Destroys the channel and closes the connection"""
-        self.close()
-
     def __str__(self):
         """Returns the name of the exchange and the type, if called for"""
         return "Exchange %s is open on %s:%d and is of type %s" % \
@@ -90,10 +79,11 @@ class Channel:
 
     def create(self):
         """Initiates the Blocking Connection and the Channel for the process"""
-        if self._channel is None:
+        global channel
+        if channel is None:
             connection = pika.BlockingConnection(self.params)
-            self._channel = connection.channel()
-        self._channel.exchange_declare(exchange=self.exchange_name,\
+            channel = connection.channel()
+        channel.exchange_declare(exchange=self.exchange_name,\
          exchange_type=self.exchange_type)
 
 class Publisher(Channel):
@@ -137,13 +127,15 @@ class Publisher(Channel):
          (self.topic, self.hostname, self.port, str(self.type))
 
     def create(self):
+        global channel
         """Initialises the channel create and also adds the logging
         publisher for sending message to logging systems"""
         Channel.create(self)
-        self._channel.exchange_declare(exchange=LOG_EXCHANGE_NAME,\
+        channel.exchange_declare(exchange=LOG_EXCHANGE_NAME,\
          exchange_type="fanout")
 
     def publish(self, message):
+        global channel
         """Method for publishing the message to the MQ Broker and also send
         a message to log exchange for logging and monitoring"""
         log_message = asvprotobuf.std_pb2.Log()
@@ -165,12 +157,12 @@ defined during the Publisher declaration")
                 raise ValueError("Are you sure that the message \
                 is Protocol Buffer message/string?")
 
-        log_success = self._channel.basic_publish(exchange=LOG_EXCHANGE_NAME,\
+        log_success = channel.basic_publish(exchange=LOG_EXCHANGE_NAME,\
          routing_key='', body=MessageToJson(log_message).replace("\n", "")\
          .replace("\'", "'"))
         if not log_success:
             raise RuntimeWarning("Cannot deliver message to logger")
-        success = self._channel.basic_publish(exchange=self.exchange_name, \
+        success = channel.basic_publish(exchange=self.exchange_name, \
          routing_key=self.topic, body=message)
         if not success:
             raise pika.exceptions.ChannelError("Cannot deliver message to exchange")
@@ -232,22 +224,22 @@ class Subscriber(Channel):
          (self.topic, self.hostname, self.port, str(self.type))
 
     def create(self):
+        global channel
         """Creates a Temporary Queue for accessing Data from the exchange"""
         Channel.create(self)
-        self._channel.exchange_declare(exchange=GRAPH_EXCHANGE_NAME,\
+        channel.exchange_declare(exchange=GRAPH_EXCHANGE_NAME,\
         exchange_type="fanout")
-        self._queue = self._channel.queue_declare(arguments=\
+        self._queue = channel.queue_declare(arguments=\
         {"x-message-ttl": self.ttl}, exclusive=True)
-        self._channel.queue_bind(exchange=self.exchange_name, \
+        channel.queue_bind(exchange=self.exchange_name, \
         queue=self.queue_name, routing_key=self.topic)
-        self._channel.basic_consume(self.callback, queue=self.queue_name)
-        self._channel.start_consuming()
+        channel.basic_consume(self.callback, queue=self.queue_name)
 
-    def callback(self, channel, method, properties, body):
+    def callback(self, _channel, method, properties, body):
         """The Subscriber calls this function everytime
          a message is received on the other end and publishes a message
          to the graph exchange to form the barebones of graph"""
-        del channel, properties
+        del _channel, properties
         if self.type is None or self.type == str:
             self._callback(body)
         else:
@@ -261,12 +253,12 @@ class Subscriber(Channel):
                 except:
                     raise ValueError("Is the Message sent Protocol\
                     Buffers message or string?")
-            self._channel.basic_ack(delivery_tag=method.delivery_tag)
+            channel.basic_ack(delivery_tag=method.delivery_tag)
             graph_message = asvprotobuf.std_pb2.Graph()
             graph_message.sender = msg.header.sender
             graph_message.msg_type = str(self.type).split("\'")[1]
             graph_message.receiver = self._node_name
-            curr_timestamp = msg.header.stamp.seconds+msg.header.stamp.nanos/(10**9)
+            curr_timestamp = msg.header.stamp
             if self._last_timestamp == 0:
                 graph_message.freq = 0
             else:
@@ -275,19 +267,28 @@ class Subscriber(Channel):
             self._last_timestamp = curr_timestamp
             if graph_message.freq < 0:
                 graph_message.freq = 0
-            graph_success = self._channel.basic_publish(exchange=GRAPH_EXCHANGE_NAME,\
+            graph_success = channel.basic_publish(exchange=GRAPH_EXCHANGE_NAME,\
              routing_key='', body=MessageToJson(graph_message).replace("\n", "")\
              .replace("\'", "'"))
             if not graph_success:
                 raise RuntimeWarning("The messages cannot be sent to graph.")
             self._callback(msg, self._callback_args)
 
+def spin(start=True):
+    global channel
+    if channel is None:
+        return
+    if start:
+        channel.start_consuming()
+    else:
+        channel.stop_consuming()
+
 def _log(string, **kwargs):
     """This function is a base function used to send log messages
     to the RabbitMQ/ASVMQ logging system"""
-    kwargs["exchange_name"] = LOG_EXCHANGE_NAME
-    kwargs["exchange_type"] = "fanout"
     level = kwargs.pop("level", 0)
+    '''kwargs["exchange_name"] = LOG_EXCHANGE_NAME
+    kwargs["exchange_type"] = "fanout"
     channel = Channel(**kwargs)
     log_message = asvprotobuf.std_pb2.Log()
     log_message.level = level
@@ -296,28 +297,41 @@ def _log(string, **kwargs):
     log_message = MessageToJson(log_message).replace("\n", "").replace("\'", "'")
     channel.channel.basic_publish(exchange=LOG_EXCHANGE_NAME, \
     body=log_message, routing_key='')
-    del channel
+    del channel'''
+    if level==0:
+        sys.stdout.write("\x1b[37m[INFO]%s\n\x1b[39m" % string)
+    elif level==1:
+        sys.stdout.write("\x1b[33m[WARN]%s\n\x1b[39m" % string)
+    elif level==2:
+        sys.stdout.write("\x1b[34m[DEBUG]%s\n\x1b[39m" % string)
+    else:
+        sys.stdout.write("\x1b[31m[FATAL]%s\n\x1b[39m" % string)
 
-def log_info(string, **kwargs):
+def log_info(string):
     """This function uses the _log function to send log messages at
     info level i.e at the user readable level(stdout)"""
+    kwargs = {}
     kwargs["level"] = 0
     _log(string, **kwargs)
 
-def log_warn(string, **kwargs):
+def log_warn(string):
     """This function uses the _log function to send log messages at
     warning level i.e at the exception that is not fatal"""
+    kwargs = {}
     kwargs["level"] = 1
     _log(string, **kwargs)
 
-def log_debug(string, **kwargs):
+def log_debug(string):
     """This function uses the _log function to send log messages at
     debug level i.e at the debugging purposes level"""
+    kwargs = {}
     kwargs["level"] = 2
     _log(string, **kwargs)
 
-def log_fatal(string, **kwargs):
+def log_fatal(string):
     """This function uses the _log function to send log messages at
     fatal error level i.e at the irrecoverable exceptions"""
+    kwargs = {}
     kwargs["level"] = 3
     _log(string, **kwargs)
+    raise Exception(string)
