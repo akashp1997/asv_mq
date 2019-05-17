@@ -67,11 +67,6 @@ class Channel:
         """Returns the name of the node that was used during the initialisation"""
         return self._node_name
 
-    @property
-    def channel(self):
-        """Returns the channel object used to connect to the RabbitMQ broker"""
-        return self._channel
-
     def __str__(self):
         """Returns the name of the exchange and the type, if called for"""
         return "Exchange %s is open on %s:%d and is of type %s" % \
@@ -129,15 +124,16 @@ class Publisher(Channel):
     def create(self):
         global channel
         """Initialises the channel create and also adds the logging
-        publisher for sending message to logging systems"""
+        publisher for sending message to logging systems
+        """
         Channel.create(self)
         channel.exchange_declare(exchange=LOG_EXCHANGE_NAME,\
          exchange_type="fanout")
 
     def publish(self, message):
-        global channel
         """Method for publishing the message to the MQ Broker and also send
         a message to log exchange for logging and monitoring"""
+        global channel
         log_message = asvprotobuf.std_pb2.Log()
         log_message.level = 0
         message.header.sender = self.node_name
@@ -262,7 +258,7 @@ class Subscriber(Channel):
             if self._last_timestamp == 0:
                 graph_message.freq = 0
             else:
-                if curr_timestamp-self._last_timestamp!=0:
+                if curr_timestamp-self._last_timestamp != 0:
                     graph_message.freq = 1/(curr_timestamp-self._last_timestamp)
             self._last_timestamp = curr_timestamp
             if graph_message.freq < 0:
@@ -275,6 +271,7 @@ class Subscriber(Channel):
             self._callback(msg, self._callback_args)
 
 def spin(start=True):
+    """This function will start the loop of Pika to start consuming"""
     global channel
     if channel is None:
         return
@@ -287,22 +284,22 @@ def _log(string, **kwargs):
     """This function is a base function used to send log messages
     to the RabbitMQ/ASVMQ logging system"""
     level = kwargs.pop("level", 0)
-    '''kwargs["exchange_name"] = LOG_EXCHANGE_NAME
+    global channel
+    kwargs["exchange_name"] = LOG_EXCHANGE_NAME
     kwargs["exchange_type"] = "fanout"
-    channel = Channel(**kwargs)
+    _channel = Channel(**kwargs)
     log_message = asvprotobuf.std_pb2.Log()
     log_message.level = level
     log_message.name = "str"
     log_message.message = string
     log_message = MessageToJson(log_message).replace("\n", "").replace("\'", "'")
-    channel.channel.basic_publish(exchange=LOG_EXCHANGE_NAME, \
+    channel.basic_publish(exchange=LOG_EXCHANGE_NAME, \
     body=log_message, routing_key='')
-    del channel'''
-    if level==0:
+    if level == 0:
         sys.stdout.write("\x1b[37m[INFO]%s\n\x1b[39m" % string)
-    elif level==1:
+    elif level == 1:
         sys.stdout.write("\x1b[33m[WARN]%s\n\x1b[39m" % string)
-    elif level==2:
+    elif level == 2:
         sys.stdout.write("\x1b[34m[DEBUG]%s\n\x1b[39m" % string)
     else:
         sys.stdout.write("\x1b[31m[FATAL]%s\n\x1b[39m" % string)
