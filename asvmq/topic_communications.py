@@ -10,6 +10,7 @@ You can use the Publisher object to send data and Subscriber object to receive i
 
 import uuid
 import sys
+import traceback
 import pika
 import asvprotobuf.std_pb2
 from google.protobuf.json_format import MessageToJson
@@ -157,7 +158,7 @@ defined during the Publisher declaration")
          routing_key='', body=MessageToJson(log_message).replace("\n", "")\
          .replace("\'", "'"))
         if not log_success:
-            raise RuntimeWarning("Cannot deliver message to logger")
+            log_warn("Cannot deliver message to logger")
         success = channel.basic_publish(exchange=self.exchange_name, \
          routing_key=self.topic, body=message)
         if not success:
@@ -267,7 +268,7 @@ class Subscriber(Channel):
              routing_key='', body=MessageToJson(graph_message).replace("\n", "")\
              .replace("\'", "'"))
             if not graph_success:
-                raise RuntimeWarning("The messages cannot be sent to graph.")
+                log_warn("The messages cannot be sent to graph.")
             self._callback(msg, self._callback_args)
 
 def spin(start=True):
@@ -328,7 +329,11 @@ def log_debug(string):
 def log_fatal(string):
     """This function uses the _log function to send log messages at
     fatal error level i.e at the irrecoverable exceptions"""
-    kwargs = {}
-    kwargs["level"] = 3
-    _log(string, **kwargs)
     raise Exception(string)
+
+def init():
+    """Initialises the exception handling of asvmq"""
+    def excepthook(exctype, excvalue, exctb):
+        err_traceback = traceback.format_exception(exctype, excvalue, exctb)
+        _log("".join(err_traceback).strip(), level=3)
+    sys.excepthook = excepthook
