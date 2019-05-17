@@ -174,7 +174,7 @@ defined during the Publisher declaration")
         if not success:
             raise pika.exceptions.ChannelError("Cannot deliver message to exchange")
 
-class Subscriber(Channel):
+class Subscriber(Channel):  #pylint: disable=too-many-instance-attributes
     """Subscriber works on a callback function to process data
     and send it forward.
     To use it, create a new object using:
@@ -257,7 +257,7 @@ class Subscriber(Channel):
         queue=self.queue_name, routing_key=self.topic)
         channel.basic_consume(self.callback, queue=self.queue_name)
 
-    def callback(self, _channel: 'pika.spec.Basic.Deliver', method: 'pika.Frame.Method', properties: 'pika.spec.BasicProperties', body: 'str or bytes') -> 'Consumer Tag(str)':
+    def callback(self, _channel: 'pika.spec.Basic.Deliver', method: 'pika.Frame.Method', properties: 'pika.spec.BasicProperties', body: 'str or bytes') -> 'Consumer Tag(str)': # pylint: disable=line-too-long
         """The Subscriber calls this function everytime
          a message is received on the other end and publishes a message
          to the graph exchange to form the barebones of graph"""
@@ -296,7 +296,7 @@ class Subscriber(Channel):
                 log_warn("The messages cannot be sent to graph.")
             self._callback(msg, self._callback_args)
 
-def spin(start=True):
+def spin(start: 'bool' = True) -> 'Enables the loop to start message comsumption on callbacks':
     """This function will start the loop of Pika to start consuming"""
     global channel
     if channel is None:
@@ -306,7 +306,7 @@ def spin(start=True):
     else:
         channel.stop_consuming()
 
-def _log(string, **kwargs):
+def _log(string: 'Log message', **kwargs: ['level']) -> 'Logs message':
     """This function is a base function used to send log messages
     to the RabbitMQ/ASVMQ logging system"""
     level = kwargs.pop("level", 0)
@@ -330,33 +330,33 @@ def _log(string, **kwargs):
     else:
         sys.stdout.write("\x1b[31m[FATAL]%s\n\x1b[39m" % string)
 
-def log_info(string):
+def log_info(string: 'Log Message') -> 'Logs message as info':
     """This function uses the _log function to send log messages at
     info level i.e at the user readable level(stdout)"""
     kwargs = {}
     kwargs["level"] = 0
     _log(string, **kwargs)
 
-def log_warn(string):
+def log_warn(string: 'Log message') -> 'Logs message as warning':
     """This function uses the _log function to send log messages at
     warning level i.e at the exception that is not fatal"""
     kwargs = {}
     kwargs["level"] = 1
     _log(string, **kwargs)
 
-def log_debug(string):
+def log_debug(string: 'Log message') -> 'Logs message as debug':
     """This function uses the _log function to send log messages at
     debug level i.e at the debugging purposes level"""
     kwargs = {}
     kwargs["level"] = 2
     _log(string, **kwargs)
 
-def log_fatal(string):
+def log_fatal(string: 'Log message') -> 'Logs message as fatal error':
     """This function uses the _log function to send log messages at
     fatal error level i.e at the irrecoverable exceptions"""
     raise Exception(string)
 
-def init():
+def init() -> 'Initialises ASVMQ exception handling mechanism':
     """Initialises the exception handling of asvmq"""
     def excepthook(exctype, excvalue, exctb):
         err_traceback = traceback.format_exception(exctype, excvalue, exctb)
