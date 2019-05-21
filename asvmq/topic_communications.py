@@ -10,6 +10,7 @@ You can use the Publisher object to send data and Subscriber object to receive i
 
 import uuid
 import sys
+import os
 import traceback
 import pika
 import asvprotobuf.std_pb2
@@ -251,9 +252,9 @@ class Subscriber(Channel):  #pylint: disable=too-many-instance-attributes
         Channel.create(self)
         channel.exchange_declare(exchange=GRAPH_EXCHANGE_NAME,\
         exchange_type="fanout")
-        self._queue = self._channel.queue_declare(arguments=\
+        self._queue = channel.queue_declare(arguments=\
         {"x-message-ttl": self.ttl, "x-max-length": self.queue_size}, exclusive=True)
-        self._channel.queue_bind(exchange=self.exchange_name, \
+        channel.queue_bind(exchange=self.exchange_name, \
         queue=self.queue_name, routing_key=self.topic)
         channel.basic_consume(self.callback, queue=self.queue_name)
 
@@ -306,7 +307,7 @@ def spin(start: 'bool' = True) -> 'Enables the loop to start message comsumption
     else:
         channel.stop_consuming()
 
-def _log(string: 'Log message', **kwargs: ['level']) -> 'Logs message':
+def _log(string: 'Log message', **kwargs: "['level']") -> 'Logs message':
     """This function is a base function used to send log messages
     to the RabbitMQ/ASVMQ logging system"""
     level = kwargs.pop("level", 0)
@@ -356,9 +357,19 @@ def log_fatal(string: 'Log message') -> 'Logs message as fatal error':
     fatal error level i.e at the irrecoverable exceptions"""
     raise Exception(string)
 
-def init() -> 'Initialises ASVMQ exception handling mechanism':
+def init() -> 'Initialises ASVMQ exception handling mechanism and init channel':
     """Initialises the exception handling of asvmq"""
+    global channel
     def excepthook(exctype, excvalue, exctb):
         err_traceback = traceback.format_exception(exctype, excvalue, exctb)
         _log("".join(err_traceback).strip(), level=3)
     sys.excepthook = excepthook
+    hostname = os.environ.get("ASVMQ_HOST", "localhost:5672").strip().split(":")
+    if len(hostname) != 2:
+        hostname = ["localhost", 5672]
+    else:
+        hostname[1] = int(hostname[1])
+    if channel is None:
+        channel = pika.BlockingConnection(pika.ConnectionParameters(*hostname)).channel()
+
+init()
